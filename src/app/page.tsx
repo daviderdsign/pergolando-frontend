@@ -31,6 +31,9 @@ export default function LoginPage() {
           setError(t("login.error.invalidCredentials"));
         } else if (err.body.error.code === "ACCOUNT_LOCKED") {
           setError(t("login.error.accountLocked"));
+        } else if (err.body.error.code === "EMAIL_NOT_VERIFIED") {
+          router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+          return;
         } else {
           setError(t("login.error.generic"));
         }
@@ -81,6 +84,9 @@ export default function LoginPage() {
             {t("login.submit")}
           </button>
         </form>
+        <p>
+          <Link href="/forgot-password">{t("login.forgotPassword")}</Link>
+        </p>
         <p>
           <Link href="/register">{t("login.registerInstead")}</Link>
         </p>
