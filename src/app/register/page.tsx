@@ -20,11 +20,18 @@ export default function RegisterPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await apiFetch("/auth/register", {
+      const { verificationRequired } = await apiFetch<{
+        seller: { id: string; email: string };
+        verificationRequired: boolean;
+      }>("/auth/register", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      router.push("/");
+      if (verificationRequired) {
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+      } else {
+        router.push("/");
+      }
     } catch (err) {
       if (err instanceof ApiError && err.body.error.code === "EMAIL_ALREADY_REGISTERED") {
         setError(t("register.error.emailTaken"));
