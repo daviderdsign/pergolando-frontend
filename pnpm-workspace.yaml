@@ -3,3 +3,10 @@ packages:
 allowBuilds:
   sharp: false
   unrs-resolver: false
+  # @pergolando/shared is a git dependency (tagged v0.1.0) with a "prepare"
+  # script (it compiles itself from TypeScript on install) — pnpm blocks
+  # build scripts from git-hosted packages by default, so this must be
+  # explicit. The key is tied to the resolved tarball URL for that tag; if
+  # the tag is re-pointed to a new commit, this key changes too — pnpm's
+  # error message on install always prints the exact key to use.
+  "@pergolando/shared@https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/e1b89539277758a613fd5efc3c8da5c3dfc31b35": true
