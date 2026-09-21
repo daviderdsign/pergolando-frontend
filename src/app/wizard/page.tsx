@@ -20,6 +20,11 @@ import { TopBar } from "@/components/TopBar";
  * itself. H1 has a real per-listino MINIMUM (depends on the L/SP combination,
  * for water drainage) that isn't in the bundle schema yet — not enforced
  * here, deliberately not pretended to be checked.
+ *
+ * Color option values are built to match the pricing engine's own
+ * nomeCompleto() (ral prefix when present) byte-for-byte, since
+ * validaColori() will check against exactly that string once price
+ * calculation is wired in.
  */
 export default function WizardPage() {
   const router = useRouter();
@@ -59,6 +64,36 @@ export default function WizardPage() {
 
   const dimensionsComplete = Boolean(larghezza && sporgenza && altezza && altezzaInclinazione);
 
+  // Matches the pricing engine's own nomeCompleto() exactly (ral prefix when
+  // present) — whatever gets picked here must be byte-for-byte what
+  // validaColori() checks against later, or a valid selection would be
+  // rejected as an "invalid color" once price calculation is wired in.
+  const struttureOptions = useMemo(() => {
+    if (!catalog) return [];
+    const { standard, con_supplemento } = catalog.prodotto.colori.struttura_e_lame;
+    return [
+      ...standard.map((c) => ({
+        value: c.ral ? `${c.ral} ${c.nome_it}` : c.nome_it,
+        label: c.ral ? `${c.ral} ${c.nome_it}` : c.nome_it,
+        supplemento: false,
+      })),
+      ...con_supplemento.map((c) => ({
+        value: c.nome_it,
+        label: `${c.nome_it} (${t("wizard.coloreSupplemento")})`,
+        supplemento: true,
+      })),
+    ];
+  }, [catalog, t]);
+  const plasticaOptions = useMemo(
+    () => catalog?.prodotto.colori.parti_plastiche.opzioni.map((c) => c.nome_it) ?? [],
+    [catalog],
+  );
+  const [coloreStruttura, setColoreStruttura] = useState("");
+  const [colorePlastica, setColorePlastica] = useState("");
+  const coloreStrutturaSupplemento = struttureOptions.find(
+    (o) => o.value === coloreStruttura,
+  )?.supplemento;
+
   useEffect(() => {
     (async () => {
       try {
@@ -67,6 +102,14 @@ export default function WizardPage() {
         setCatalog(loaded);
         const firstKey = Object.keys(loaded.sotto_modelli)[0];
         if (firstKey) setSottoModelloKey(firstKey);
+        const firstStandard = loaded.prodotto.colori.struttura_e_lame.standard[0];
+        if (firstStandard) {
+          setColoreStruttura(
+            firstStandard.ral ? `${firstStandard.ral} ${firstStandard.nome_it}` : firstStandard.nome_it,
+          );
+        }
+        const firstPlastica = loaded.prodotto.colori.parti_plastiche.opzioni[0];
+        if (firstPlastica) setColorePlastica(firstPlastica.nome_it);
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           router.push("/");
@@ -246,9 +289,50 @@ export default function WizardPage() {
           )}
         </section>
 
-        <button type="button" disabled={!dimensionsComplete} onClick={() => setSummary(
-          `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm`,
-        )}>
+        <section aria-labelledby="colors-section-heading">
+          <h2 id="colors-section-heading">{t("wizard.colorsSection")}</h2>
+          <div className="field-grid">
+            <label htmlFor="coloreStruttura">
+              {t("wizard.coloreStruttura")}
+              <select
+                id="coloreStruttura"
+                value={coloreStruttura}
+                onChange={(e) => setColoreStruttura(e.target.value)}
+              >
+                {struttureOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label htmlFor="colorePlastica">
+              {catalog.prodotto.colori.parti_plastiche.tag || t("wizard.colorePlastica")}
+              <select
+                id="colorePlastica"
+                value={colorePlastica}
+                onChange={(e) => setColorePlastica(e.target.value)}
+              >
+                {plasticaOptions.map((nome) => (
+                  <option key={nome} value={nome}>
+                    {nome}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {coloreStrutturaSupplemento && <p className="muted">{t("wizard.coloreSupplementoHint")}</p>}
+        </section>
+
+        <button
+          type="button"
+          disabled={!dimensionsComplete}
+          onClick={() =>
+            setSummary(
+              `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm — ${coloreStruttura} / ${colorePlastica}`,
+            )
+          }
+        >
           {t("wizard.next")}
         </button>
         {summary && (
