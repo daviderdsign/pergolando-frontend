@@ -9,10 +9,17 @@ import { TopBar } from "@/components/TopBar";
 
 /**
  * First wizard step: end-client data + product/sotto-modello/variante
- * selection from the tenant's bundle. Dimensions (VEN-4), price calculation
- * (VEN-6) and PDF output (VEN-7) are the next slice — "Avanti" here only
- * summarizes the current selection rather than advancing to a screen that
- * doesn't exist yet.
+ * selection, plus base dimensions (L, SP, H, H1). Price calculation (VEN-6)
+ * and PDF output (VEN-7) are the next slice — "Avanti" here only summarizes
+ * the current configuration rather than advancing to a screen that doesn't
+ * exist yet.
+ *
+ * L/SP are range-checked against the selected variante's own constraints
+ * (L_max_per_n_moduli, vincoli_dimensionali.P_min_cm/P_max_cm) — those come
+ * straight from the bundle, so they're as reliable as the catalog data
+ * itself. H1 has a real per-listino MINIMUM (depends on the L/SP combination,
+ * for water drainage) that isn't in the bundle schema yet — not enforced
+ * here, deliberately not pretended to be checked.
  */
 export default function WizardPage() {
   const router = useRouter();
@@ -34,6 +41,23 @@ export default function WizardPage() {
     return Object.keys(catalog.sotto_modelli[sottoModelloKey]!.varianti_montaggio);
   }, [catalog, sottoModelloKey]);
   const [varianteKey, setVarianteKey] = useState("");
+
+  const [larghezza, setLarghezza] = useState("");
+  const [sporgenza, setSporgenza] = useState("");
+  const [altezza, setAltezza] = useState("");
+  const [altezzaInclinazione, setAltezzaInclinazione] = useState("");
+  const [summary, setSummary] = useState<string | null>(null);
+
+  const sottoModello = catalog && sottoModelloKey ? catalog.sotto_modelli[sottoModelloKey] : undefined;
+  const variante =
+    sottoModello && varianteKey ? sottoModello.varianti_montaggio[varianteKey] : undefined;
+  const larghezzaMaxCm = variante
+    ? Math.max(...Object.values(variante.L_max_per_n_moduli ?? { "1": 0 }))
+    : undefined;
+  const sporgenzaMinCm = sottoModello?.vincoli_dimensionali.P_min_cm;
+  const sporgenzaMaxCm = sottoModello?.vincoli_dimensionali.P_max_cm;
+
+  const dimensionsComplete = Boolean(larghezza && sporgenza && altezza && altezzaInclinazione);
 
   useEffect(() => {
     (async () => {
@@ -60,6 +84,16 @@ export default function WizardPage() {
     const firstVariante = Object.keys(catalog.sotto_modelli[sottoModelloKey]!.varianti_montaggio)[0];
     setVarianteKey(firstVariante ?? "");
   }, [catalog, sottoModelloKey]);
+
+  // Each variante has its own L/SP constraints — values entered against a
+  // different one wouldn't mean anything, so start the dimensions over.
+  useEffect(() => {
+    setLarghezza("");
+    setSporgenza("");
+    setAltezza("");
+    setAltezzaInclinazione("");
+    setSummary(null);
+  }, [sottoModelloKey, varianteKey]);
 
   async function handleLogout() {
     await apiFetch("/auth/logout", { method: "POST" });
@@ -150,9 +184,78 @@ export default function WizardPage() {
           </div>
         </section>
 
-        <button type="button" disabled>
+        <section aria-labelledby="dimensions-section-heading">
+          <h2 id="dimensions-section-heading">{t("wizard.dimensionsSection")}</h2>
+          <div className="field-grid">
+            <label htmlFor="larghezza">
+              {t("wizard.larghezza")}
+              <input
+                id="larghezza"
+                type="number"
+                min={1}
+                max={larghezzaMaxCm}
+                required
+                value={larghezza}
+                onChange={(e) => setLarghezza(e.target.value)}
+              />
+            </label>
+            <label htmlFor="sporgenza">
+              {t("wizard.sporgenza")}
+              <input
+                id="sporgenza"
+                type="number"
+                min={sporgenzaMinCm}
+                max={sporgenzaMaxCm}
+                required
+                value={sporgenza}
+                onChange={(e) => setSporgenza(e.target.value)}
+              />
+            </label>
+            <label htmlFor="altezza">
+              {t("wizard.altezza")}
+              <input
+                id="altezza"
+                type="number"
+                min={1}
+                required
+                value={altezza}
+                onChange={(e) => setAltezza(e.target.value)}
+              />
+            </label>
+            <label htmlFor="altezzaInclinazione">
+              {t("wizard.altezzaInclinazione")}
+              <input
+                id="altezzaInclinazione"
+                type="number"
+                min={1}
+                required
+                value={altezzaInclinazione}
+                onChange={(e) => setAltezzaInclinazione(e.target.value)}
+              />
+            </label>
+          </div>
+          {larghezzaMaxCm !== undefined && (
+            <p className="muted">
+              {t("wizard.larghezzaHint")} {larghezzaMaxCm} cm
+            </p>
+          )}
+          {sporgenzaMinCm !== undefined && sporgenzaMaxCm !== undefined && (
+            <p className="muted">
+              {t("wizard.sporgenzaHint")} {sporgenzaMinCm}–{sporgenzaMaxCm} cm
+            </p>
+          )}
+        </section>
+
+        <button type="button" disabled={!dimensionsComplete} onClick={() => setSummary(
+          `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm`,
+        )}>
           {t("wizard.next")}
         </button>
+        {summary && (
+          <p className="muted" role="status">
+            {summary}
+          </p>
+        )}
       </main>
     </>
   );
