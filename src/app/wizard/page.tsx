@@ -3,16 +3,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CatalogDatabase } from "@pergolando/shared/schema";
+import type { ConfigurazionePergola } from "@pergolando/shared/pricing-engine";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { TopBar } from "@/components/TopBar";
 
 /**
  * First wizard step: end-client data + product/sotto-modello/variante
- * selection, plus base dimensions (L, SP, H, H1). Price calculation (VEN-6)
- * and PDF output (VEN-7) are the next slice — "Avanti" here only summarizes
- * the current configuration rather than advancing to a screen that doesn't
- * exist yet.
+ * selection, base dimensions, colors, comandi, accessori — and now real
+ * price calculation (POST /catalog/configura, backed by the same pricing
+ * engine used everywhere else). PDF output (VEN-7) is the next slice;
+ * there's no "next screen" yet, so this just shows the price breakdown
+ * inline rather than advancing anywhere.
+ *
+ * H1 (altezza per calcolo inclinazione) is collected but never sent to the
+ * engine — it has no role in ConfiguraInput, only a real per-listino MINIMUM
+ * that isn't in the bundle schema yet (see the dimensions section below).
  *
  * L/SP are range-checked against the selected variante's own constraints
  * (L_max_per_n_moduli, vincoli_dimensionali.P_min_cm/P_max_cm) — those come
@@ -66,7 +72,9 @@ export default function WizardPage() {
   const [sporgenza, setSporgenza] = useState("");
   const [altezza, setAltezza] = useState("");
   const [altezzaInclinazione, setAltezzaInclinazione] = useState("");
-  const [summary, setSummary] = useState<string | null>(null);
+  const [calcolando, setCalcolando] = useState(false);
+  const [risultato, setRisultato] = useState<ConfigurazionePergola | null>(null);
+  const [calcoloError, setCalcoloError] = useState<string | null>(null);
 
   const sottoModello = catalog && sottoModelloKey ? catalog.sotto_modelli[sottoModelloKey] : undefined;
   const variante =
@@ -187,12 +195,44 @@ export default function WizardPage() {
     setAltezzaInclinazione("");
     setComandoKey("");
     setAccessoriSelezionati([]);
-    setSummary(null);
+    setRisultato(null);
+    setCalcoloError(null);
   }, [sottoModelloKey, varianteKey]);
 
   async function handleLogout() {
     await apiFetch("/auth/logout", { method: "POST" });
     router.push("/");
+  }
+
+  async function handleCalcola() {
+    setCalcolando(true);
+    setCalcoloError(null);
+    setRisultato(null);
+    try {
+      const opzioniPrezzoFisso = comandoKey ? [comandoKey] : undefined;
+      const { configurazione } = await apiFetch<{ configurazione: ConfigurazionePergola }>(
+        "/catalog/configura",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            sottoModello: sottoModelloKey,
+            varianteMontaggio: varianteKey,
+            pRichiestaCm: Number(sporgenza),
+            lRichiestaCm: Number(larghezza),
+            coloreStruttura,
+            colorePlastica,
+            altezzaMontantiCm: Number(altezza),
+            opzioniPrezzoFisso,
+            accessoriSelezionati: accessoriSelezionati.length > 0 ? accessoriSelezionati : undefined,
+          }),
+        },
+      );
+      setRisultato(configurazione);
+    } catch (err) {
+      setCalcoloError(err instanceof ApiError ? err.body.error.message : t("wizard.calcoloErrorGeneric"));
+    } finally {
+      setCalcolando(false);
+    }
   }
 
   if (loading) {
@@ -444,21 +484,45 @@ export default function WizardPage() {
           </section>
         )}
 
-        <button
-          type="button"
-          disabled={!dimensionsComplete}
-          onClick={() =>
-            setSummary(
-              `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm — ${coloreStruttura} / ${colorePlastica} — ${t(fissaggio === "parete" ? "wizard.fissaggioParete" : "wizard.fissaggioSoffitto")}${comando ? ` — ${comando.nome} (${comando.prezzoEur >= 0 ? "+" : ""}${comando.prezzoEur} €)` : ""}${accessoriSelezionati.length > 0 ? ` — ${t("wizard.accessoriSection")}: ${accessoriSelezionati.map((k) => accessorioOptions.find((a) => a.key === k)?.nome).join(", ")}` : ""}`,
-            )
-          }
-        >
-          {t("wizard.next")}
+        <button type="button" disabled={!dimensionsComplete || calcolando} onClick={handleCalcola}>
+          {calcolando ? t("wizard.calcolando") : t("wizard.calcola")}
         </button>
-        {summary && (
-          <p className="muted" role="status">
-            {summary}
+
+        {calcoloError && (
+          <p className="error" role="alert">
+            {calcoloError}
           </p>
+        )}
+
+        {risultato && (
+          <section aria-labelledby="risultato-section-heading">
+            <h2 id="risultato-section-heading">{t("wizard.risultatoSection")}</h2>
+            <ul className="voci-costo-list">
+              {risultato.voci_costo.map((v, i) => (
+                <li key={i}>
+                  <span>{v.descrizione}</span>
+                  <span>{v.importo_eur.toFixed(2)} €</span>
+                </li>
+              ))}
+            </ul>
+            <p className="prezzo-totale">
+              {t("wizard.prezzoTotale")} <strong>{risultato.prezzo_totale_eur.toFixed(2)} €</strong>
+            </p>
+            {risultato.avvisi.length > 0 && (
+              <ul className="avvisi-list">
+                {risultato.avvisi.map((a, i) => (
+                  <li key={i} className="muted">
+                    {a}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {altezzaInclinazione && (
+              <p className="muted">
+                H1 ({altezzaInclinazione}cm): {t("wizard.h1NonVerificato")}
+              </p>
+            )}
+          </section>
         )}
       </main>
     </>
