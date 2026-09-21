@@ -35,6 +35,11 @@ import { TopBar } from "@/components/TopBar";
  * optional, only defined for products that have it (Flag); the section is
  * hidden entirely when a product doesn't. The selected key maps directly to
  * ConfiguraInput.opzioniPrezzoFisso once price calculation is wired in.
+ *
+ * Accessori come from sottoModello.accessori — multiple can be selected
+ * (unlike comando), and unlike comando their price depends on L/SP so it
+ * isn't shown here at all, only once price calculation is wired in and can
+ * resolve the right P_riferimento row / L column for each one.
  */
 export default function WizardPage() {
   const router = useRouter();
@@ -121,6 +126,24 @@ export default function WizardPage() {
   const [comandoKey, setComandoKey] = useState("");
   const comando = comandoOptions.find((o) => o.key === comandoKey);
 
+  // Unlike comando (one choice), accessories can be combined freely — the
+  // exact price depends on L/SP and is only computed once price calculation
+  // is wired in, so this step just collects which ones were requested.
+  const accessorioOptions = useMemo(() => {
+    if (!sottoModello?.accessori) return [];
+    return Object.entries(sottoModello.accessori).map(([key, a]) => ({
+      key,
+      nome: a.nome,
+      indicizzatoPer: a.indicizzato_per,
+    }));
+  }, [sottoModello]);
+  const [accessoriSelezionati, setAccessoriSelezionati] = useState<string[]>([]);
+  function toggleAccessorio(key: string) {
+    setAccessoriSelezionati((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  }
+
   useEffect(() => {
     (async () => {
       try {
@@ -163,6 +186,7 @@ export default function WizardPage() {
     setAltezza("");
     setAltezzaInclinazione("");
     setComandoKey("");
+    setAccessoriSelezionati([]);
     setSummary(null);
   }, [sottoModelloKey, varianteKey]);
 
@@ -398,12 +422,34 @@ export default function WizardPage() {
           </section>
         )}
 
+        {accessorioOptions.length > 0 && (
+          <section aria-labelledby="accessori-section-heading">
+            <h2 id="accessori-section-heading">{t("wizard.accessoriSection")}</h2>
+            <p className="muted">{t("wizard.accessoriHint")}</p>
+            <ul className="checkbox-list">
+              {accessorioOptions.map((a) => (
+                <li key={a.key}>
+                  <label htmlFor={`accessorio-${a.key}`}>
+                    <input
+                      id={`accessorio-${a.key}`}
+                      type="checkbox"
+                      checked={accessoriSelezionati.includes(a.key)}
+                      onChange={() => toggleAccessorio(a.key)}
+                    />{" "}
+                    {a.nome}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <button
           type="button"
           disabled={!dimensionsComplete}
           onClick={() =>
             setSummary(
-              `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm — ${coloreStruttura} / ${colorePlastica} — ${t(fissaggio === "parete" ? "wizard.fissaggioParete" : "wizard.fissaggioSoffitto")}${comando ? ` — ${comando.nome} (${comando.prezzoEur >= 0 ? "+" : ""}${comando.prezzoEur} €)` : ""}`,
+              `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm — ${coloreStruttura} / ${colorePlastica} — ${t(fissaggio === "parete" ? "wizard.fissaggioParete" : "wizard.fissaggioSoffitto")}${comando ? ` — ${comando.nome} (${comando.prezzoEur >= 0 ? "+" : ""}${comando.prezzoEur} €)` : ""}${accessoriSelezionati.length > 0 ? ` — ${t("wizard.accessoriSection")}: ${accessoriSelezionati.map((k) => accessorioOptions.find((a) => a.key === k)?.nome).join(", ")}` : ""}`,
             )
           }
         >
