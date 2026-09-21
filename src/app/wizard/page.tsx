@@ -30,6 +30,11 @@ import { TopBar } from "@/components/TopBar";
  * the bundle — the schema only carries a free-text description per variante
  * (variante.fissaggio), not a structured set of options, since this is the
  * first product needing it as a real user choice rather than a fixed trait.
+ *
+ * Comandi (radio controls) come from sottoModello.opzioni_prezzo_fisso —
+ * optional, only defined for products that have it (Flag); the section is
+ * hidden entirely when a product doesn't. The selected key maps directly to
+ * ConfiguraInput.opzioniPrezzoFisso once price calculation is wired in.
  */
 export default function WizardPage() {
   const router = useRouter();
@@ -101,6 +106,21 @@ export default function WizardPage() {
 
   const [fissaggio, setFissaggio] = useState<"parete" | "soffitto">("parete");
 
+  // Only some products define flat-priced add-ons (e.g. Flag's radio
+  // controls) — the section itself is hidden when there are none, rather
+  // than shown empty.
+  const comandoOptions = useMemo(() => {
+    if (!sottoModello?.opzioni_prezzo_fisso) return [];
+    return Object.entries(sottoModello.opzioni_prezzo_fisso).map(([key, o]) => ({
+      key,
+      nome: o.nome,
+      prezzoEur: o.prezzo_eur,
+      vincolo: o.vincolo,
+    }));
+  }, [sottoModello]);
+  const [comandoKey, setComandoKey] = useState("");
+  const comando = comandoOptions.find((o) => o.key === comandoKey);
+
   useEffect(() => {
     (async () => {
       try {
@@ -142,6 +162,7 @@ export default function WizardPage() {
     setSporgenza("");
     setAltezza("");
     setAltezzaInclinazione("");
+    setComandoKey("");
     setSummary(null);
   }, [sottoModelloKey, varianteKey]);
 
@@ -358,12 +379,31 @@ export default function WizardPage() {
           {variante?.fissaggio && <p className="muted">{variante.fissaggio}</p>}
         </section>
 
+        {comandoOptions.length > 0 && (
+          <section aria-labelledby="comando-section-heading">
+            <h2 id="comando-section-heading">{t("wizard.comandoSection")}</h2>
+            <label htmlFor="comando">
+              {t("wizard.comando")}
+              <select id="comando" value={comandoKey} onChange={(e) => setComandoKey(e.target.value)}>
+                <option value="">{t("wizard.comandoNessuno")}</option>
+                {comandoOptions.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.nome} ({o.prezzoEur >= 0 ? "+" : ""}
+                    {o.prezzoEur} €)
+                  </option>
+                ))}
+              </select>
+            </label>
+            {comando?.vincolo && <p className="muted">{comando.vincolo}</p>}
+          </section>
+        )}
+
         <button
           type="button"
           disabled={!dimensionsComplete}
           onClick={() =>
             setSummary(
-              `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm — ${coloreStruttura} / ${colorePlastica} — ${t(fissaggio === "parete" ? "wizard.fissaggioParete" : "wizard.fissaggioSoffitto")}`,
+              `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm — ${coloreStruttura} / ${colorePlastica} — ${t(fissaggio === "parete" ? "wizard.fissaggioParete" : "wizard.fissaggioSoffitto")}${comando ? ` — ${comando.nome} (${comando.prezzoEur >= 0 ? "+" : ""}${comando.prezzoEur} €)` : ""}`,
             )
           }
         >
