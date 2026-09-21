@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { TopBar } from "@/components/TopBar";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,9 +47,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <header className="top-bar">
-        <LanguageSwitcher />
-      </header>
+      <TopBar />
       <main className="page">
         <h1>{t("login.title")}</h1>
         <form onSubmit={handleSubmit}>
