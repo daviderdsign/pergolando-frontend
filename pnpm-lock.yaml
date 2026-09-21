@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@pergolando/shared':
-        specifier: github:daviderdsign/pergolando-shared#v0.1.0
-        version: https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/e1b89539277758a613fd5efc3c8da5c3dfc31b35
+        specifier: github:daviderdsign/pergolando-shared#v0.2.0
+        version: https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/10c62814f70c3e205e510b95b1301195f4909e21
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7)(@playwright/test@1.63.0)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -455,8 +455,8 @@ packages:
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
 
-  '@pergolando/shared@https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/e1b89539277758a613fd5efc3c8da5c3dfc31b35':
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/e1b89539277758a613fd5efc3c8da5c3dfc31b35}
+  '@pergolando/shared@https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/10c62814f70c3e205e510b95b1301195f4909e21':
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/10c62814f70c3e205e510b95b1301195f4909e21}
     version: 0.1.0
     engines: {node: '>=24'}
 
@@ -2219,7 +2219,7 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
-  '@pergolando/shared@https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/e1b89539277758a613fd5efc3c8da5c3dfc31b35':
+  '@pergolando/shared@https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/10c62814f70c3e205e510b95b1301195f4909e21':
     dependencies:
       zod: 3.25.76
 
