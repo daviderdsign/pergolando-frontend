@@ -25,6 +25,11 @@ import { TopBar } from "@/components/TopBar";
  * nomeCompleto() (ral prefix when present) byte-for-byte, since
  * validaColori() will check against exactly that string once price
  * calculation is wired in.
+ *
+ * Fissaggio (wall/ceiling mount) is a plain hardcoded choice, not read from
+ * the bundle — the schema only carries a free-text description per variante
+ * (variante.fissaggio), not a structured set of options, since this is the
+ * first product needing it as a real user choice rather than a fixed trait.
  */
 export default function WizardPage() {
   const router = useRouter();
@@ -93,6 +98,8 @@ export default function WizardPage() {
   const coloreStrutturaSupplemento = struttureOptions.find(
     (o) => o.value === coloreStruttura,
   )?.supplemento;
+
+  const [fissaggio, setFissaggio] = useState<"parete" | "soffitto">("parete");
 
   useEffect(() => {
     (async () => {
@@ -324,12 +331,39 @@ export default function WizardPage() {
           {coloreStrutturaSupplemento && <p className="muted">{t("wizard.coloreSupplementoHint")}</p>}
         </section>
 
+        <section aria-labelledby="fissaggio-section-heading">
+          <h2 id="fissaggio-section-heading">{t("wizard.fissaggioSection")}</h2>
+          <div role="radiogroup" aria-labelledby="fissaggio-section-heading" className="field-grid">
+            <label htmlFor="fissaggioParete">
+              <input
+                id="fissaggioParete"
+                type="radio"
+                name="fissaggio"
+                checked={fissaggio === "parete"}
+                onChange={() => setFissaggio("parete")}
+              />{" "}
+              {t("wizard.fissaggioParete")}
+            </label>
+            <label htmlFor="fissaggioSoffitto">
+              <input
+                id="fissaggioSoffitto"
+                type="radio"
+                name="fissaggio"
+                checked={fissaggio === "soffitto"}
+                onChange={() => setFissaggio("soffitto")}
+              />{" "}
+              {t("wizard.fissaggioSoffitto")}
+            </label>
+          </div>
+          {variante?.fissaggio && <p className="muted">{variante.fissaggio}</p>}
+        </section>
+
         <button
           type="button"
           disabled={!dimensionsComplete}
           onClick={() =>
             setSummary(
-              `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm — ${coloreStruttura} / ${colorePlastica}`,
+              `${catalog.prodotto.nome} / ${sottoModello?.nome} / ${variante?.nome} — L ${larghezza}cm × SP ${sporgenza}cm, H ${altezza}cm, H1 ${altezzaInclinazione}cm — ${coloreStruttura} / ${colorePlastica} — ${t(fissaggio === "parete" ? "wizard.fissaggioParete" : "wizard.fissaggioSoffitto")}`,
             )
           }
         >
