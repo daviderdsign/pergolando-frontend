@@ -12,17 +12,19 @@ export interface Branding {
 }
 
 /**
- * Fetched once, server-side, in the root layout — /branding needs no
- * session (the login page itself must be able to show it) and rarely
- * changes, so there's no reason to re-fetch it per page.
+ * Fetched server-side, in the root layout, on every request — /branding
+ * needs no session (the login page itself must be able to show it).
+ *
+ * Deliberately NOT cached: the backend's bundle can be swapped on disk and
+ * reloaded (container restart) independently of the frontend, and Next's
+ * fetch cache has no automatic invalidation for that — a cached response
+ * would keep serving the previous tenant's branding indefinitely until the
+ * frontend itself happens to redeploy. The payload is tiny, so paying a
+ * fetch per request is the safer default over silent staleness.
  */
 export async function fetchBranding(): Promise<Branding | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/v1/branding`, {
-      // Branding changes only when the tenant re-deploys with a new bundle —
-      // safe to let the platform cache this for the lifetime of the server.
-      cache: "force-cache",
-    });
+    const res = await fetch(`${API_BASE_URL}/api/v1/branding`, { cache: "no-store" });
     if (!res.ok) return null;
     const data = (await res.json()) as {
       branding: {
