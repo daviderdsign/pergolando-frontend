@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { TopBar } from "@/components/TopBar";
 
 function VerifyEmailForm() {
   const { t } = useI18n();
@@ -62,9 +62,7 @@ function VerifyEmailForm() {
 
   return (
     <>
-      <header className="top-bar">
-        <LanguageSwitcher />
-      </header>
+      <TopBar />
       <main className="page">
         <h1>{t("verify.title")}</h1>
         {verified ? (

@@ -1,5 +1,9 @@
 :root {
   color-scheme: light dark;
+  --color-primary: #111827;
+  --color-secondary: #111827;
+  --color-text: #111827;
+  --color-background: #ffffff;
 }
 
 * {
@@ -10,6 +14,8 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-background);
 }
 
 .page {
@@ -59,7 +65,7 @@ button {
 
 button {
   cursor: pointer;
-  background: #111827;
+  background: var(--color-primary);
   color: white;
   border: none;
   font-weight: 600;
@@ -78,19 +84,33 @@ button:disabled {
 
 .top-bar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   padding: 1rem 1.25rem 0;
   gap: 0.5rem;
 }
 
+.brand-logo {
+  max-height: 2.5rem;
+  max-width: 10rem;
+  object-fit: contain;
+}
+
+.top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
 .lang-switcher button {
   background: transparent;
-  color: #111827;
+  color: var(--color-text);
   padding: 0.3rem 0.6rem;
 }
 
 .lang-switcher button[aria-pressed="true"] {
-  background: #111827;
+  background: var(--color-primary);
   color: white;
 }
 

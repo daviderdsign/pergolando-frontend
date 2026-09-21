@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CatalogDatabase } from "@pergolando/shared/schema";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { TopBar } from "@/components/TopBar";
 
 /**
  * First wizard step: end-client data + product/sotto-modello/variante
@@ -78,12 +78,11 @@ export default function WizardPage() {
 
   return (
     <>
-      <header className="top-bar">
+      <TopBar>
         <button type="button" onClick={handleLogout}>
           {t("nav.logout")}
         </button>
-        <LanguageSwitcher />
-      </header>
+      </TopBar>
       <main className="page wizard-page">
         <h1>{t("wizard.title")}</h1>
 

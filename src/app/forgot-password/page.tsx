@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { TopBar } from "@/components/TopBar";
 
 export default function ForgotPasswordPage() {
   const { t } = useI18n();
@@ -55,9 +55,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <>
-      <header className="top-bar">
-        <LanguageSwitcher />
-      </header>
+      <TopBar />
       <main className="page">
         {step === "request" && (
           <>
