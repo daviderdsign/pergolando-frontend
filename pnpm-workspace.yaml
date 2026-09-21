@@ -9,4 +9,4 @@ allowBuilds:
   # explicit. The key is tied to the resolved tarball URL for that tag; if
   # the tag is re-pointed to a new commit, this key changes too — pnpm's
   # error message on install always prints the exact key to use.
-  "@pergolando/shared@https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/e1b89539277758a613fd5efc3c8da5c3dfc31b35": true
+  "@pergolando/shared@https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/fce9743a5bfd37679ade21995f057500ed627ea6": true
