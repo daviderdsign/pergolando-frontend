@@ -134,3 +134,29 @@ button:disabled {
   align-items: center;
   font-weight: 400;
 }
+
+.voci-costo-list,
+.avvisi-list {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+}
+
+.voci-costo-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.prezzo-totale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.1rem;
+  margin: 0.75rem 0;
+}
+
+.avvisi-list li {
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+}
