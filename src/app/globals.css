@@ -156,7 +156,203 @@ button:disabled {
   margin: 0.75rem 0;
 }
 
+.rendering-image {
+  display: block;
+  max-width: 100%;
+  margin-top: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.immagine-finale {
+  display: block;
+  max-width: 100%;
+  margin-top: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
 .avvisi-list li {
   padding: 0.25rem 0;
   font-size: 0.85rem;
+}
+
+.foto-ambiente-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.foto-ambiente-section h3 {
+  margin: 0 0 0.5rem;
+}
+
+.file-input-label {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  cursor: pointer;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-weight: 600;
+}
+
+.file-input-label input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid #d1d5db;
+  margin-top: 0.5rem;
+}
+
+.punti-riferimento-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.punti-riferimento-image {
+  display: block;
+  max-width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: crosshair;
+}
+
+.punto-riferimento-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: #dc2626;
+  color: white;
+  border: 2px solid white;
+  padding: 0;
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.magnifier {
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid white;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  background: #111;
+  z-index: 10;
+}
+
+.magnifier canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.punti-riferimento-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.render3d-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.linea-riferimento-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.linea-riferimento-line {
+  stroke: #dc2626;
+  stroke-width: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.linea-controllo-line {
+  stroke: #16a34a;
+  stroke-width: 0.6;
+  stroke-dasharray: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.punto-controllo-marker {
+  background: #16a34a;
+}
+
+.lunghezza-linea {
+  margin-top: 0.75rem;
+}
+
+.lunghezza-linea input {
+  display: block;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  color: var(--color-text);
+  border: 1px solid #d1d5db;
+  max-width: 10rem;
+}
+
+.posizionamento-pergola {
+  margin-top: 1rem;
+}
+
+.griglia-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* White + mix-blend-mode: difference gives self-adjusting contrast against
+   whatever is underneath (light lines on a dark floor, dark lines on a
+   light one) instead of a fixed color that disappears on some photos —
+   real bug, seen live on a grey floor. */
+.griglia-linea {
+  stroke: #fff;
+  stroke-width: 0.15;
+  vector-effect: non-scaling-stroke;
+  mix-blend-mode: difference;
+}
+
+.griglia-rettangolo {
+  fill: rgba(220, 38, 38, 0.25);
+  stroke: #fff;
+  stroke-width: 0.5;
+  vector-effect: non-scaling-stroke;
+  mix-blend-mode: difference;
+}
+
+.griglia-trascinabile {
+  touch-action: none;
 }

@@ -7,6 +7,14 @@ import type { ConfigurazionePergola } from "@pergolando/shared/pricing-engine";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { TopBar } from "@/components/TopBar";
+import {
+  PosizionamentoPergola,
+  PUNTI_RIFERIMENTO_COUNT,
+  type PuntoRiferimento,
+  type RettangoloConfermato,
+} from "@/components/PosizionamentoPergola";
+import { rebasePose, type PosaCamera } from "@/lib/camera-geometry";
+import { compositeImages } from "@/lib/image-compose";
 
 /**
  * First wizard step: end-client data + product/sotto-modello/variante
@@ -75,6 +83,244 @@ export default function WizardPage() {
   const [calcolando, setCalcolando] = useState(false);
   const [risultato, setRisultato] = useState<ConfigurazionePergola | null>(null);
   const [calcoloError, setCalcoloError] = useState<string | null>(null);
+
+  const [generandoRendering, setGenerandoRendering] = useState(false);
+  const [renderImage, setRenderImage] = useState<string | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  // Step 1 of the "compose on a real photo" pipeline: just capture/upload the
+  // site photo here (kept as a data URL, client-side only — no backend call
+  // yet). Steps 2-6 (tapping reference points, OpenCV perspective, 3D
+  // compositing, Canny/depth map, ControlNet) build on top of this photo in
+  // later slices.
+  const [fotoAmbiente, setFotoAmbiente] = useState<string | null>(null);
+  const [fotoAmbienteError, setFotoAmbienteError] = useState<string | null>(null);
+  // Step 2: the 2-point reference line traced on the photo (normalized
+  // coordinates) — tied to the photo itself, reset whenever it's
+  // replaced/removed. `lineaLunghezzaCm` is its real length, prefilled with
+  // the pergola's own width (the common case: the line traces exactly where
+  // the pergola will sit) but editable when the seller traced a different,
+  // more precisely measurable reference instead.
+  const [puntiRiferimento, setPuntiRiferimento] = useState<PuntoRiferimento[]>([]);
+  const [lineaLunghezzaCm, setLineaLunghezzaCm] = useState("");
+  // Optional control line (a second, ideally perpendicular reference) —
+  // over-determines the camera resection instead of relying on a single
+  // line's exact-fit solve, which otherwise absorbs all tap imprecision
+  // into the solved yaw (looks like "the perspective is subtly wrong on
+  // one side" — real feedback from a live test). See CalcolaProspettivaDto.
+  const [puntoControllo, setPuntoControllo] = useState<PuntoRiferimento | null>(null);
+  const [lunghezzaControlloCm, setLunghezzaControlloCm] = useState("");
+
+  useEffect(() => {
+    if (puntiRiferimento.length === PUNTI_RIFERIMENTO_COUNT && !lineaLunghezzaCm) {
+      setLineaLunghezzaCm(larghezza);
+    }
+  }, [puntiRiferimento.length, lineaLunghezzaCm, larghezza]);
+
+  function handleFotoAmbienteChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setFotoAmbienteError(t("wizard.fotoAmbienteErrorTipo"));
+      return;
+    }
+    setFotoAmbienteError(null);
+    setPuntiRiferimento([]);
+    setLineaLunghezzaCm("");
+    const reader = new FileReader();
+    reader.onload = () => setFotoAmbiente(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
+  function handleRimuoviFotoAmbiente() {
+    setFotoAmbiente(null);
+    setFotoAmbienteError(null);
+    setPuntiRiferimento([]);
+    setLineaLunghezzaCm("");
+  }
+
+  // Step 3a: GeoCalib (single-image camera calibration) + a 2-point
+  // resection on the backend, from the traced reference line — the result
+  // is the roof plane's 4 corners projected back onto the photo (no longer
+  // drawn — PosizionamentoPergola switches straight to the grid once this
+  // resolves), plus the camera pose relative to that line's own position.
+  // Only an intermediate result now: the line is just for calibrating the
+  // camera (any convenient, precisely traceable real edge works), not
+  // necessarily where the pergola actually goes — step 3b (the grid)
+  // handles placement.
+  const [calcolandoProspettiva, setCalcolandoProspettiva] = useState(false);
+  const [prospettivaError, setProspettivaError] = useState<string | null>(null);
+  const [posaCamera, setPosaCamera] = useState<PosaCamera | null>(null);
+
+  // Step 3b: the seller drags freely on a real-unit floor grid (projected
+  // from the step 3a camera pose) to choose WHERE the pergola sits — never
+  // its size, which always stays the quote's own larghezza/sporgenza (see
+  // PosizionamentoPergola). `posaCameraFinale` is the camera pose
+  // re-expressed relative to the resulting front-left corner (see
+  // rebasePose), which is what step 4 actually renders with; falls back to
+  // the raw step 3a pose if the seller never drags (position defaults to
+  // being centered on, and flush against, the calibration line itself).
+  const [posaCameraFinale, setPosaCameraFinale] = useState<PosaCamera | null>(null);
+  const [rettangoloInfo, setRettangoloInfo] = useState<RettangoloConfermato | null>(null);
+
+  function handleConfermaRettangolo(rettangolo: RettangoloConfermato) {
+    if (!posaCamera) return;
+    setPosaCameraFinale(rebasePose(posaCamera, rettangolo.origineMondo));
+    setRettangoloInfo(rettangolo);
+    setScena3dImage(null);
+    setScena3dError(null);
+  }
+
+  // Step 4: render the real 3D model (3d/flag.blend) in that camera pose.
+  const [generandoScena3d, setGenerandoScena3d] = useState(false);
+  const [scena3dImage, setScena3dImage] = useState<string | null>(null);
+  const [scena3dError, setScena3dError] = useState<string | null>(null);
+
+  // Step 6: the final, lifestyle-ready composite — real photo + the
+  // already-correctly-positioned grey silhouette (steps 1-4) go to Gemini,
+  // a photorealistic image comes back. See RenderFinaleService/
+  // buildCompositePrompt on the backend for what's actually asked of it.
+  const [generandoFinale, setGenerandoFinale] = useState(false);
+  const [immagineFinale, setImmagineFinale] = useState<string | null>(null);
+  const [finaleError, setFinaleError] = useState<string | null>(null);
+
+  function handlePuntiRiferimentoChange(updater: (prev: PuntoRiferimento[]) => PuntoRiferimento[]) {
+    setPuntiRiferimento(updater);
+    // Any change to the points invalidates a previously computed overlay —
+    // and the line's real length, which only makes sense for THIS line —
+    // and the control line, which starts from punti[0].
+    setLineaLunghezzaCm("");
+    setPuntoControllo(null);
+    setLunghezzaControlloCm("");
+    setProspettivaError(null);
+    setPosaCamera(null);
+    setPosaCameraFinale(null);
+    setRettangoloInfo(null);
+    setScena3dImage(null);
+    setScena3dError(null);
+  }
+
+  async function handleCalcolaProspettiva() {
+    if (!fotoAmbiente || !lineaLunghezzaCm) return;
+    setCalcolandoProspettiva(true);
+    setProspettivaError(null);
+    setPosaCameraFinale(null);
+    setRettangoloInfo(null);
+    setScena3dImage(null);
+    try {
+      const { posaCamera: posa } = await apiFetch<{
+        tettoNormalizzato: PuntoRiferimento[];
+        posaCamera: PosaCamera;
+      }>("/catalog/perspective", {
+        method: "POST",
+        body: JSON.stringify({
+          fotoBase64: fotoAmbiente,
+          punti: puntiRiferimento,
+          lineaLunghezzaCm: Number(lineaLunghezzaCm),
+          ...(puntoControllo && lunghezzaControlloCm
+            ? {
+                puntoControllo,
+                lineaControlloLunghezzaCm: Number(lunghezzaControlloCm),
+              }
+            : {}),
+          lRichiestaCm: Number(larghezza),
+          pRichiestaCm: Number(sporgenza),
+          altezzaCm: Number(altezza),
+        }),
+      });
+      setPosaCamera(posa);
+    } catch (err) {
+      setProspettivaError(
+        err instanceof ApiError ? err.body.error.message : t("wizard.prospettivaErrorGeneric"),
+      );
+    } finally {
+      setCalcolandoProspettiva(false);
+    }
+  }
+
+  // deltaH (the rear-side rise, for water drainage) isn't collected by the
+  // wizard as its own field yet — altezzaInclinazione's real meaning is
+  // still unclear (see the note on the field below), so this is a deliberate
+  // placeholder estimate, not a real product value: ~12% of the projection,
+  // matching the reference model's own proportions (40cm rise over 300cm).
+  const deltaHCmStimato = Math.max(10, Math.round(Number(sporgenza) * 0.12));
+
+  async function handleGeneraScena3d() {
+    // The grid-drawn rectangle's pose (step 3b) if the seller placed one;
+    // otherwise the raw, un-rebased calibration pose already IS the right
+    // default. Both of Blender's assumptions already line up with the
+    // calibration frame's own origin without any shift: X=0 is the
+    // calibration line's own midpoint (its object points are symmetric
+    // around X=0, matching Blender's own center-of-front-edge convention),
+    // and the line sits at Z=pCmPreventivo (the assumed wall) — exactly
+    // `pCmPreventivo` deeper than Blender's own front-edge origin (Z=0),
+    // which is the pergola's own real depth. Rebasing to a non-identity
+    // default here (tried twice — once to a corner instead of the center,
+    // once to the wall/rear instead of the front) introduced real
+    // position/orientation bugs both times; see PosizionamentoPergola's
+    // RettangoloConfermato doc.
+    const posaDaUsare = posaCameraFinale ?? posaCamera;
+    if (!posaDaUsare) return;
+    setGenerandoScena3d(true);
+    setScena3dError(null);
+    try {
+      const { imageBase64, mimeType } = await apiFetch<{ imageBase64: string; mimeType: string }>(
+        "/catalog/render3d",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            lRichiestaCm: Number(larghezza),
+            pRichiestaCm: Number(sporgenza),
+            altezzaCm: Number(altezza),
+            deltaHCm: deltaHCmStimato,
+            // The wizard only offers wall/ceiling mounting today (no
+            // freestanding option), both of which mean "no rear posts" in
+            // the 3D model's terms.
+            fissaggio: "parete",
+            camera: posaDaUsare,
+          }),
+        },
+      );
+      setScena3dImage(`data:${mimeType};base64,${imageBase64}`);
+      setImmagineFinale(null);
+      setFinaleError(null);
+    } catch (err) {
+      setScena3dError(
+        err instanceof ApiError ? err.body.error.message : t("wizard.scena3dErrorGeneric"),
+      );
+    } finally {
+      setGenerandoScena3d(false);
+    }
+  }
+
+  async function handleGeneraFinale() {
+    if (!fotoAmbiente || !scena3dImage) return;
+    setGenerandoFinale(true);
+    setFinaleError(null);
+    try {
+      const fotoConSagoma = await compositeImages(fotoAmbiente, scena3dImage);
+      const { imageBase64, mimeType } = await apiFetch<{ imageBase64: string; mimeType: string }>(
+        "/catalog/render-finale",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...buildConfiguraPayload(),
+            fotoAmbienteBase64: fotoAmbiente,
+            fotoConSagomaBase64: fotoConSagoma,
+            deltaHCm: deltaHCmStimato,
+          }),
+        },
+      );
+      setImmagineFinale(`data:${mimeType};base64,${imageBase64}`);
+    } catch (err) {
+      setFinaleError(
+        err instanceof ApiError ? err.body.error.message : t("wizard.finaleErrorGeneric"),
+      );
+    } finally {
+      setGenerandoFinale(false);
+    }
+  }
 
   const sottoModello = catalog && sottoModelloKey ? catalog.sotto_modelli[sottoModelloKey] : undefined;
   const variante =
@@ -197,6 +443,8 @@ export default function WizardPage() {
     setAccessoriSelezionati([]);
     setRisultato(null);
     setCalcoloError(null);
+    setRenderImage(null);
+    setRenderError(null);
   }, [sottoModelloKey, varianteKey]);
 
   async function handleLogout() {
@@ -204,34 +452,56 @@ export default function WizardPage() {
     router.push("/");
   }
 
+  // Shared by /catalog/configura and /catalog/render — a render is always
+  // for the exact configuration being priced, same input shape either way.
+  function buildConfiguraPayload() {
+    const opzioniPrezzoFisso = comandoKey ? [comandoKey] : undefined;
+    return {
+      sottoModello: sottoModelloKey,
+      varianteMontaggio: varianteKey,
+      pRichiestaCm: Number(sporgenza),
+      lRichiestaCm: Number(larghezza),
+      coloreStruttura,
+      colorePlastica,
+      altezzaMontantiCm: Number(altezza),
+      opzioniPrezzoFisso,
+      accessoriSelezionati: accessoriSelezionati.length > 0 ? accessoriSelezionati : undefined,
+    };
+  }
+
   async function handleCalcola() {
     setCalcolando(true);
     setCalcoloError(null);
     setRisultato(null);
+    setRenderImage(null);
+    setRenderError(null);
     try {
-      const opzioniPrezzoFisso = comandoKey ? [comandoKey] : undefined;
       const { configurazione } = await apiFetch<{ configurazione: ConfigurazionePergola }>(
         "/catalog/configura",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            sottoModello: sottoModelloKey,
-            varianteMontaggio: varianteKey,
-            pRichiestaCm: Number(sporgenza),
-            lRichiestaCm: Number(larghezza),
-            coloreStruttura,
-            colorePlastica,
-            altezzaMontantiCm: Number(altezza),
-            opzioniPrezzoFisso,
-            accessoriSelezionati: accessoriSelezionati.length > 0 ? accessoriSelezionati : undefined,
-          }),
-        },
+        { method: "POST", body: JSON.stringify(buildConfiguraPayload()) },
       );
       setRisultato(configurazione);
     } catch (err) {
       setCalcoloError(err instanceof ApiError ? err.body.error.message : t("wizard.calcoloErrorGeneric"));
     } finally {
       setCalcolando(false);
+    }
+  }
+
+  async function handleGeneraRendering() {
+    setGenerandoRendering(true);
+    setRenderError(null);
+    setRenderImage(null);
+    try {
+      const { imageBase64, mimeType } = await apiFetch<{ imageBase64: string; mimeType: string }>(
+        "/catalog/render",
+        { method: "POST", body: JSON.stringify(buildConfiguraPayload()) },
+      );
+      setRenderImage(`data:${mimeType};base64,${imageBase64}`);
+    } catch (err) {
+      setRenderError(err instanceof ApiError ? err.body.error.message : t("wizard.renderingErrorGeneric"));
+    } finally {
+      setGenerandoRendering(false);
     }
   }
 
@@ -522,6 +792,127 @@ export default function WizardPage() {
                 H1 ({altezzaInclinazione}cm): {t("wizard.h1NonVerificato")}
               </p>
             )}
+
+            <button type="button" disabled={generandoRendering} onClick={handleGeneraRendering}>
+              {generandoRendering ? t("wizard.generandoRendering") : t("wizard.generaRendering")}
+            </button>
+
+            {renderError && (
+              <p className="error" role="alert">
+                {renderError}
+              </p>
+            )}
+
+            {renderImage && (
+              <img src={renderImage} alt={t("wizard.renderingAlt")} className="rendering-image" />
+            )}
+
+            <div className="foto-ambiente-section">
+              <h3>{t("wizard.fotoAmbienteSection")}</h3>
+              <p className="muted">{t("wizard.fotoAmbienteHint")}</p>
+              <label htmlFor="fotoAmbiente" className="file-input-label">
+                {fotoAmbiente ? t("wizard.fotoAmbienteSostituisci") : t("wizard.fotoAmbienteScegli")}
+                <input
+                  id="fotoAmbiente"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFotoAmbienteChange}
+                />
+              </label>
+              {fotoAmbienteError && (
+                <p className="error" role="alert">
+                  {fotoAmbienteError}
+                </p>
+              )}
+              {fotoAmbiente && (
+                <>
+                  <button type="button" className="secondary" onClick={handleRimuoviFotoAmbiente}>
+                    {t("wizard.fotoAmbienteRimuovi")}
+                  </button>
+
+                  <h3>{t("wizard.puntiRiferimentoSection")}</h3>
+                  <PosizionamentoPergola
+                    fotoSrc={fotoAmbiente}
+                    fotoAlt={t("wizard.fotoAmbienteAlt")}
+                    punti={puntiRiferimento}
+                    onPuntiChange={handlePuntiRiferimentoChange}
+                    lunghezzaLineaCm={lineaLunghezzaCm}
+                    onLunghezzaLineaCmChange={setLineaLunghezzaCm}
+                    posaCamera={posaCamera}
+                    lCmPreventivo={Number(larghezza)}
+                    pCmPreventivo={Number(sporgenza)}
+                    rettangolo={rettangoloInfo}
+                    onConfermaRettangolo={handleConfermaRettangolo}
+                    puntoControllo={puntoControllo}
+                    onPuntoControlloChange={setPuntoControllo}
+                    lunghezzaControlloCm={lunghezzaControlloCm}
+                    onLunghezzaControlloCmChange={setLunghezzaControlloCm}
+                    overlayRender3d={scena3dImage}
+                  />
+
+                  {!posaCamera && puntiRiferimento.length === PUNTI_RIFERIMENTO_COUNT && lineaLunghezzaCm && (
+                    <button
+                      type="button"
+                      disabled={calcolandoProspettiva}
+                      onClick={handleCalcolaProspettiva}
+                    >
+                      {calcolandoProspettiva
+                        ? t("wizard.calcolandoProspettiva")
+                        : t("wizard.calcolaProspettiva")}
+                    </button>
+                  )}
+                  {prospettivaError && (
+                    <p className="error" role="alert">
+                      {prospettivaError}
+                    </p>
+                  )}
+
+                  {posaCamera && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={generandoScena3d}
+                      onClick={handleGeneraScena3d}
+                    >
+                      {generandoScena3d
+                        ? t("wizard.generandoScena3d")
+                        : t("wizard.generaScena3d")}
+                    </button>
+                  )}
+                  {scena3dError && (
+                    <p className="error" role="alert">
+                      {scena3dError}
+                    </p>
+                  )}
+
+                  {scena3dImage && (
+                    <>
+                      <h3>{t("wizard.finaleSection")}</h3>
+                      <p className="muted">{t("wizard.finaleHint")}</p>
+                      <button
+                        type="button"
+                        disabled={generandoFinale}
+                        onClick={handleGeneraFinale}
+                      >
+                        {generandoFinale ? t("wizard.generandoFinale") : t("wizard.generaFinale")}
+                      </button>
+                      {finaleError && (
+                        <p className="error" role="alert">
+                          {finaleError}
+                        </p>
+                      )}
+                      {immagineFinale && (
+                        <img
+                          src={immagineFinale}
+                          alt={t("wizard.finaleAlt")}
+                          className="immagine-finale"
+                        />
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </section>
         )}
       </main>
