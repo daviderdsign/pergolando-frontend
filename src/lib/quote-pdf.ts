@@ -1,0 +1,24 @@
+import {jsPDF} from 'jspdf';
+import type {ConfigurazionePergola} from '@pergolando/shared/pricing-engine';
+export type QuoteDocument={importedSource?:string;include3d?:boolean;firstName:string;lastName:string;email:string;phone:string;address:string;productName:string;brand:string;description:string;accessories:string[];quote:ConfigurazionePergola;rise:number;productPhoto?:string;renderPhoto?:string;technicalDrawings?:{plan:string;front:string;side:string;spanCm:number};vendorName?:string};
+export function createQuotePdf(data:QuoteDocument){
+ const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'}),q=data.quote,vendor=data.vendorName||'Pergolando',client=`${data.firstName} ${data.lastName}`.trim();
+ const money=(v:number)=>new Intl.NumberFormat('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)+' EUR';
+ function text(value:string,x:number,y:number,size=11,width=260){doc.setFontSize(size);doc.text(doc.splitTextToSize(value,width),x,y);}
+ function page(title:string){if(doc.getNumberOfPages()>0&&doc.getCurrentPageInfo().pageNumber>0)doc.addPage();doc.setTextColor(40,53,44);text(vendor,18,17,12);text(title,18,36,23);doc.setDrawColor(210);doc.line(18,44,279,44);}
+ function picture(src:string|undefined,x:number,y:number,w:number,h:number){if(!src)return;const info=doc.getImageProperties(src),scale=Math.min(w/info.width,h/info.height);doc.addImage(src,x+(w-info.width*scale)/2,y+(h-info.height*scale)/2,info.width*scale,info.height*scale);}
+ doc.setTextColor(40,53,44);text(vendor,18,23,20);text('Preventivo per il tuo progetto',18,61,30);text(client,18,82,23);text(data.productName,18,100,18);text([data.address,data.email,data.phone].filter(Boolean).join('\n'),18,117,12,140);text('Data: '+new Date().toLocaleDateString('it-IT'),18,184,10);picture(data.productPhoto,173,61,104,100);
+ page('Il preventivo');text(client+' · '+data.productName,18,54,12);let y=68;
+ for(const item of q.voci_costo){const lines=doc.splitTextToSize(item.descrizione,195);if(y+lines.length*5>160){page('Preventivo · dettaglio');y=60;}text(item.descrizione,18,y,11,195);text(money(item.importo_eur),224,y,11,55);y+=Math.max(12,lines.length*5+5);}
+ text('Totale di listino: '+money(q.prezzo_totale_eur),18,y+6,20);y+=23;
+ for(const note of q.avvisi){const lines=doc.splitTextToSize(note,255);if(y+lines.length*4>185){page('Preventivo · note di catalogo');y=60;}text(note,18,y,9,255);y+=lines.length*4+5;}
+ page('Scheda prodotto · '+data.productName);text(data.brand,18,55,13);text(data.description||'Caratteristiche dal catalogo selezionato.',18,67,11,150);picture(data.productPhoto,183,55,93,83);text('Colore: '+q.colore_struttura,18,112,11,150);if(data.importedSource){text('Fonte: '+data.importedSource,18,123,10,250);text(`Dimensioni richieste: L ${q.L_richiesta_cm} cm - P ${q.P_richiesta_cm} cm - H ${q.altezza_montanti_cm} cm`,18,134,10,250);}else{text('Tipo lama: '+(q.opzione_tecnica||'Da catalogo'),18,123);text('Configurazione: '+q.variante_montaggio+' · '+q.n_moduli+' modulo/i',18,134);}text('Accessori selezionati',18,151,13);text(data.accessories.length?data.accessories.join('\n'):'Nessun accessorio aggiuntivo selezionato.',18,162,10,250);
+ const L=q.L_totale_effettiva_cm,P=q.P_totale_effettiva_cm,H=q.altezza_montanti_cm;
+ if(data.include3d!==false)for(const kind of ['plan','front','side']){page(kind==='plan'?'Planimetria':kind==='front'?'Prospetto frontale':'Prospetto laterale');doc.setDrawColor(40,53,44);doc.setLineWidth(.35);
+ if(data.technicalDrawings){const key=kind as 'plan'|'front'|'side';picture(data.technicalDrawings[key],(297-125)/2,50,125,125);}else text('Viste Blender non ancora disponibili.',18,90,12);
+ text(`Quote di progetto: L ${L} cm - SP ${P} cm - H ${H} cm - H1 ${data.rise} cm`,18,178,9);
+ text(data.productName+' · '+q.variante_montaggio,18,188,10);text('Quote effettive di catalogo. Viste ortografiche Blender; dettagli costruttivi e attacchi da definire.',18,195,8);}
+ if(data.include3d!==false){page('Il progetto ambientato');if(data.renderPhoto)picture(data.renderPhoto,18,52,261,133);else text('Rendering non ancora generato. Questa pagina sara completata con l’immagine ambientata.',18,79,13);}page('Grazie per il vostro interessamento');text('Siamo a disposizione per approfondire il progetto e accompagnarvi nella scelta.',18,75,18,240);text(vendor,18,116,18);text('Progetto per '+client+' · '+data.productName,18,133,12);
+ const total=doc.getNumberOfPages();for(let i=1;i<=total;i++){doc.setPage(i);doc.setFontSize(9);doc.setTextColor(120);doc.text(`${i} / ${total}`,273,201);}
+ return doc;
+}

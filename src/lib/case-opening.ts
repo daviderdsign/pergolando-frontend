@@ -1,0 +1,4 @@
+export type CaseOpening={id?:string;financeRevision?:number;caseName:string;companyName:string;firstName:string;lastName:string;email:string;phone:string;address:string;siteAddress:string;projectNotes:string};
+export const emptyCase=():CaseOpening=>({caseName:'',companyName:'',firstName:'',lastName:'',email:'',phone:'',address:'',siteAddress:'',projectNotes:''});
+export type CaseFile={id:string;name:string;mimeType:string;size:number;createdAt:string};
+export async function filePayload(file:File){if(!['application/pdf','image/png','image/jpeg'].includes(file.type)||file.size>8*1024*1024||!file.size)throw new Error('Usa PDF, PNG o JPEG fino a 8 MB per file.');const data=await new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onerror=()=>reject(new Error('File non leggibile.'));r.onload=()=>resolve(String(r.result).split(',')[1]);r.readAsDataURL(file);});return {name:file.name,mimeType:file.type,data};}

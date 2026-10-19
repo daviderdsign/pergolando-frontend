@@ -1,0 +1,3 @@
+export type OfferTerms={installationCents:number;transportCents:number;discountBps:number;vatBps:number;depositBps:number};
+export function offerTotals(subtotal:number,t:OfferTerms){const discount=Math.round(subtotal*t.discountBps/10000),taxable=subtotal-discount+t.installationCents+t.transportCents,vat=Math.round(taxable*t.vatBps/10000),total=taxable+vat,deposit=Math.round(total*t.depositBps/10000);return {subtotal,discount,taxable,vat,total,deposit,balance:total-deposit};}
+export function amountInput(value:string,max:number){if(!/^\d+(?:[.,]\d{1,2})?$/.test(value.trim()))return null;const n=Math.round(Number(value.replace(',','.'))*100);return Number.isSafeInteger(n)&&n>=0&&n<=max?n:null;}

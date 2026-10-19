@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
   cameraModelFromPosa,
@@ -111,7 +111,14 @@ function Magnifier({ img, xNorm, yNorm }: { img: HTMLImageElement; xNorm: number
   // phone — found testing in an isolated harness before wiring this in.
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
-  useEffect(() => {
+  // useLayoutEffect, not useEffect (2026-10-05, Davide: visible lag
+  // between the finger and the loupe's content/position on a phone) —
+  // useEffect runs AFTER the browser paints, so every finger-move left one
+  // extra frame where the loupe showed its PREVIOUS crop/position before
+  // catching up; useLayoutEffect runs synchronously before paint instead,
+  // so the redraw lands in the same frame as the pointer move that caused
+  // it. Both effects below (canvas content, then position) need this.
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !img.complete || img.naturalWidth === 0) return;
     const ctx = canvas.getContext("2d");
@@ -152,7 +159,7 @@ function Magnifier({ img, xNorm, yNorm }: { img: HTMLImageElement; xNorm: number
     drawCross();
   }, [img, xNorm, yNorm]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const rect = img.getBoundingClientRect();
     const dispW = rect.width;
     const dispH = rect.height;
@@ -297,10 +304,20 @@ export function PosizionamentoPergola({
     return pts.join(" ");
   }, [cam, trascinamento, rettangolo, lCmPreventivo, pCmPreventivo, W, H]);
 
-  // Point-tapping phase (pre-posaCamera): press-move-release instead of a
-  // plain click, so the magnifier can follow the finger and the point only
-  // commits on release — the user can see exactly where they're about to
-  // place it first, instead of committing blind under their own finger.
+  // Point-tapping phase (pre-posaCamera). Two input styles, both handled by
+  // the same three functions below:
+  //  - mouse: the loupe follows the cursor on plain HOVER (no button down
+  //    needed — pointermove fires continuously), and a click commits
+  //    whatever point it's currently showing. This is the "segue il mouse
+  //    finché non si riclicca" behaviour Davide asked for (2026-10-04).
+  //  - touch/pen: there's no hover, so pointermove only ever fires while
+  //    the finger is down — same press-move-release shape as before,
+  //    unchanged: the loupe tracks the finger and the point commits on
+  //    release, so the finger covering the exact pixel never blocks seeing
+  //    it (the original reason this component exists).
+  // handlePuntoPointerDown still seeds the loupe immediately too, so a
+  // quick tap/click with no move in between (no intervening pointermove
+  // event at all) still shows/commits the right spot.
   function normDaEvento(e: PointerEvent<HTMLImageElement>): PuntoRiferimento | null {
     const img = imgRef.current;
     if (!img) return null;
@@ -319,9 +336,16 @@ export function PosizionamentoPergola({
   }
 
   function handlePuntoPointerMove(e: PointerEvent<HTMLImageElement>) {
-    if (posaCamera || !magnifier) return;
+    if (posaCamera) return;
     const p = normDaEvento(e);
     if (p) setMagnifier(p);
+  }
+
+  function handlePuntoPointerLeave() {
+    // Only relevant to the mouse-hover case: pointer capture keeps a
+    // touch/pen drag targeted at this element even if it briefly strays
+    // outside its bounds, so this doesn't fire mid-drag there.
+    if (!posaCamera) setMagnifier(null);
   }
 
   function handlePuntoPointerUp() {
@@ -416,6 +440,24 @@ export function PosizionamentoPergola({
           ref={imgRef}
           src={fotoSrc}
           alt={fotoAlt}
+          // Without this, a mousedown-then-move on most desktop browsers
+          // starts the browser's OWN native image drag instead of
+          // continuing normal pointer events — found 2026-10-04 diagnosing
+          // Davide's "works fine until I move the mouse a little, then it
+          // goes haywire" report: the loupe wasn't malfunctioning, native
+          // drag-and-drop was hijacking the gesture out from under it.
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
+          // Touch equivalent of the same problem, found live 2026-10-05
+          // testing from an Android phone: a long-press (which is exactly
+          // how the loupe gets held in place to place a point) triggers
+          // the browser's own native image context menu ("save image",
+          // "search with ...", etc.) instead of reaching this component at
+          // all. preventDefault on contextmenu stops it on Chrome/Android;
+          // the CSS touch-callout/user-select rules (see
+          // .punti-riferimento-image) cover Safari/iOS, which doesn't
+          // always respect the JS event alone for its own callout menu.
+          onContextMenu={(e) => e.preventDefault()}
           className={posaCamera ? "punti-riferimento-image griglia-trascinabile" : "punti-riferimento-image"}
           onPointerDown={(e) => {
             handleGridPointerDown(e);
@@ -429,6 +471,7 @@ export function PosizionamentoPergola({
             handleGridPointerUp();
             handlePuntoPointerUp();
           }}
+          onPointerLeave={handlePuntoPointerLeave}
           onPointerCancel={() => setMagnifier(null)}
         />
         {overlayRender3d && (
@@ -438,12 +481,19 @@ export function PosizionamentoPergola({
           <Magnifier img={imgRef.current} xNorm={magnifier.xNorm} yNorm={magnifier.yNorm} />
         )}
         {posaCamera ? (
-          <svg className="griglia-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            {grigliaLinee.map((l, i) => (
-              <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} className="griglia-linea" />
-            ))}
-            {rettangoloPoligono && <polygon points={rettangoloPoligono} className="griglia-rettangolo" />}
-          </svg>
+          // Grid hidden once the 3D render is showing (2026-10-04, Davide):
+          // its job — dragging to place the pergola — is done by then, and
+          // it was only cluttering the view while judging the render's fit.
+          // Further repositioning goes through the wizard's own fine-tune
+          // buttons (offsetXCm/offsetZCm) instead.
+          !overlayRender3d && (
+            <svg className="griglia-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              {grigliaLinee.map((l, i) => (
+                <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} className="griglia-linea" />
+              ))}
+              {rettangoloPoligono && <polygon points={rettangoloPoligono} className="griglia-rettangolo" />}
+            </svg>
+          )
         ) : (
           <>
             {punti.length === PUNTI_RIFERIMENTO_COUNT && (

@@ -1,0 +1,3 @@
+"use client";
+import {useRouter} from 'next/navigation';
+export function WorkflowNavigation({stage}:{stage:'documents'|'quote'}){const router=useRouter();return <label className="pv-project-nav"><select aria-label="Sezioni del progetto" value={stage} onChange={e=>router.push(e.target.value==='home'?'/pratiche':e.target.value==='catalogs'?'/cataloghi':e.target.value==='documents'?'/cataloghi/importa':'/cataloghi')}><optgroup label="Cataloghi del rivenditore"><option value="documents">Importazione e verifica listini</option>{stage==='quote'&&<option value="quote">Configurazione del prodotto</option>}</optgroup><optgroup label="──────────"><option value="catalogs">Cataloghi e listini</option><option value="home">Pratiche clienti</option></optgroup></select></label>;}

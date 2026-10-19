@@ -1,6 +1,8 @@
 packages:
   - "."
 allowBuilds:
+  tesseract.js: false
+  core-js: false
   sharp: false
   unrs-resolver: false
   # @pergolando/shared is a git dependency (tagged v0.1.0) with a "prepare"
@@ -10,3 +12,4 @@ allowBuilds:
   # the tag is re-pointed to a new commit, this key changes too — pnpm's
   # error message on install always prints the exact key to use.
   "@pergolando/shared@https://codeload.github.com/daviderdsign/pergolando-shared/tar.gz/fce9743a5bfd37679ade21995f057500ed627ea6": true
+

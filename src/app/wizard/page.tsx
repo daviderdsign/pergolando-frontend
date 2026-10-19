@@ -14,7 +14,7 @@ import {
   type RettangoloConfermato,
 } from "@/components/PosizionamentoPergola";
 import { rebasePose, type PosaCamera } from "@/lib/camera-geometry";
-import { compositeImages } from "@/lib/image-compose";
+import { compositeImages, downscaleDataUrl } from "@/lib/image-compose";
 
 /**
  * First wizard step: end-client data + product/sotto-modello/variante
@@ -170,12 +170,38 @@ export default function WizardPage() {
     setRettangoloInfo(rettangolo);
     setScena3dImage(null);
     setScena3dError(null);
+    resetTweak();
   }
 
   // Step 4: render the real 3D model (3d/flag.blend) in that camera pose.
   const [generandoScena3d, setGenerandoScena3d] = useState(false);
   const [scena3dImage, setScena3dImage] = useState<string | null>(null);
   const [scena3dError, setScena3dError] = useState<string | null>(null);
+
+  // Step 4b: post-preview visual-only fine-tuning (2026-10-04) — Davide's
+  // own feedback after a live test: the calibrated position was right but
+  // the apparent height was off, and he wants to nudge a render's on-photo
+  // fit directly (position + height + width) without that correction ever
+  // reaching the price configurator. These stay in their own state, never
+  // written into larghezza/altezza — buildConfiguraPayload() (pricing) and
+  // the quote form keep using only the real values the seller configured.
+  // Position nudges (offsetX/offsetZ) are a pure world-space shift of the
+  // whole render (see generate_flag.py's apply_visual_offset); height/width
+  // nudges just add to altezzaCm/lRichiestaCm for this render call only —
+  // "lower it" still means every leg reaches the real ground, not a floating
+  // shift, which is exactly what altezzaCm already guarantees.
+  const TWEAK_STEP_CM = 10;
+  const [tweakOffsetX, setTweakOffsetX] = useState(0);
+  const [tweakOffsetZ, setTweakOffsetZ] = useState(0);
+  const [tweakDeltaL, setTweakDeltaL] = useState(0);
+  const [tweakDeltaH, setTweakDeltaH] = useState(0);
+
+  function resetTweak() {
+    setTweakOffsetX(0);
+    setTweakOffsetZ(0);
+    setTweakDeltaL(0);
+    setTweakDeltaH(0);
+  }
 
   // Step 6: the final, lifestyle-ready composite — real photo + the
   // already-correctly-positioned grey silhouette (steps 1-4) go to Gemini,
@@ -239,14 +265,17 @@ export default function WizardPage() {
     }
   }
 
-  // deltaH (the rear-side rise, for water drainage) isn't collected by the
-  // wizard as its own field yet — altezzaInclinazione's real meaning is
-  // still unclear (see the note on the field below), so this is a deliberate
-  // placeholder estimate, not a real product value: ~12% of the projection,
-  // matching the reference model's own proportions (40cm rise over 300cm).
-  const deltaHCmStimato = Math.max(10, Math.round(Number(sporgenza) * 0.12));
-
-  async function handleGeneraScena3d() {
+  // `tweak` is explicit, not read from state, so a button's onClick can
+  // compute its own updated numbers and pass them straight through —
+  // reading tweakOffsetX etc. here instead would race against React's
+  // async state updates and send the PREVIOUS values on the very click
+  // that changed them.
+  async function generaScena3dConTweak(tweak: {
+    offsetX: number;
+    offsetZ: number;
+    deltaL: number;
+    deltaH: number;
+  }) {
     // The grid-drawn rectangle's pose (step 3b) if the seller placed one;
     // otherwise the raw, un-rebased calibration pose already IS the right
     // default. Both of Blender's assumptions already line up with the
@@ -270,15 +299,20 @@ export default function WizardPage() {
         {
           method: "POST",
           body: JSON.stringify({
-            lRichiestaCm: Number(larghezza),
+            lRichiestaCm: Number(larghezza) + tweak.deltaL,
             pRichiestaCm: Number(sporgenza),
-            altezzaCm: Number(altezza),
-            deltaHCm: deltaHCmStimato,
+            altezzaCm: Number(altezza) + tweak.deltaH,
+            deltaHCm: Number(altezzaInclinazione),
             // The wizard only offers wall/ceiling mounting today (no
             // freestanding option), both of which mean "no rear posts" in
             // the 3D model's terms.
             fissaggio: "parete",
             camera: posaDaUsare,
+            coloreStruttura,
+            colorePlastica,
+            varianteMontaggio: varianteKey,
+            offsetXCm: tweak.offsetX,
+            offsetZCm: tweak.offsetZ,
           }),
         },
       );
@@ -294,21 +328,47 @@ export default function WizardPage() {
     }
   }
 
+  function handleGeneraScena3d() {
+    resetTweak();
+    return generaScena3dConTweak({ offsetX: 0, offsetZ: 0, deltaL: 0, deltaH: 0 });
+  }
+
+  function handleTweak(axis: "offsetX" | "offsetZ" | "deltaL" | "deltaH", stepCm: number) {
+    const next = {
+      offsetX: axis === "offsetX" ? tweakOffsetX + stepCm : tweakOffsetX,
+      offsetZ: axis === "offsetZ" ? tweakOffsetZ + stepCm : tweakOffsetZ,
+      deltaL: axis === "deltaL" ? tweakDeltaL + stepCm : tweakDeltaL,
+      deltaH: axis === "deltaH" ? tweakDeltaH + stepCm : tweakDeltaH,
+    };
+    setTweakOffsetX(next.offsetX);
+    setTweakOffsetZ(next.offsetZ);
+    setTweakDeltaL(next.deltaL);
+    setTweakDeltaH(next.deltaH);
+    void generaScena3dConTweak(next);
+  }
+
   async function handleGeneraFinale() {
     if (!fotoAmbiente || !scena3dImage) return;
     setGenerandoFinale(true);
     setFinaleError(null);
     try {
-      const fotoConSagoma = await compositeImages(fotoAmbiente, scena3dImage);
+      // Both capped to a sane resolution before encoding — a real phone
+      // photo sent at full resolution overflowed the backend's JSON body
+      // limit on its own, with the request failing before the backend ever
+      // got far enough to log it (2026-10-03, see image-compose.ts).
+      const [fotoAmbienteRidotta, fotoConSagoma] = await Promise.all([
+        downscaleDataUrl(fotoAmbiente),
+        compositeImages(fotoAmbiente, scena3dImage),
+      ]);
       const { imageBase64, mimeType } = await apiFetch<{ imageBase64: string; mimeType: string }>(
         "/catalog/render-finale",
         {
           method: "POST",
           body: JSON.stringify({
             ...buildConfiguraPayload(),
-            fotoAmbienteBase64: fotoAmbiente,
+            fotoAmbienteBase64: fotoAmbienteRidotta,
             fotoConSagomaBase64: fotoConSagoma,
-            deltaHCm: deltaHCmStimato,
+            deltaHCm: Number(altezzaInclinazione),
           }),
         },
       );
@@ -883,6 +943,96 @@ export default function WizardPage() {
                     <p className="error" role="alert">
                       {scena3dError}
                     </p>
+                  )}
+
+                  {scena3dImage && (
+                    <div className="scena3d-tweak">
+                      <h3>{t("wizard.tweakSection")}</h3>
+                      <p className="muted">{t("wizard.tweakHint")}</p>
+                      <div className="scena3d-tweak-row">
+                        <span>{t("wizard.tweakPosizione")}</span>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={() => handleTweak("offsetX", -TWEAK_STEP_CM)}
+                        >
+                          ←
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={() => handleTweak("offsetX", TWEAK_STEP_CM)}
+                        >
+                          →
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={() => handleTweak("offsetZ", TWEAK_STEP_CM)}
+                        >
+                          {t("wizard.tweakAvanti")}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={() => handleTweak("offsetZ", -TWEAK_STEP_CM)}
+                        >
+                          {t("wizard.tweakIndietro")}
+                        </button>
+                      </div>
+                      <div className="scena3d-tweak-row">
+                        <span>{t("wizard.tweakAltezza")}</span>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={() => handleTweak("deltaH", -TWEAK_STEP_CM)}
+                        >
+                          −
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={() => handleTweak("deltaH", TWEAK_STEP_CM)}
+                        >
+                          +
+                        </button>
+                      </div>
+                      <div className="scena3d-tweak-row">
+                        <span>{t("wizard.tweakLarghezza")}</span>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={() => handleTweak("deltaL", -TWEAK_STEP_CM)}
+                        >
+                          −
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={() => handleTweak("deltaL", TWEAK_STEP_CM)}
+                        >
+                          +
+                        </button>
+                      </div>
+                      {(tweakOffsetX !== 0 || tweakOffsetZ !== 0 || tweakDeltaL !== 0 || tweakDeltaH !== 0) && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={generandoScena3d}
+                          onClick={handleGeneraScena3d}
+                        >
+                          {t("wizard.tweakReset")}
+                        </button>
+                      )}
+                    </div>
                   )}
 
                   {scena3dImage && (

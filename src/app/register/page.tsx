@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { TopBar } from "@/components/TopBar";
+import { AuthShell } from "@/components/AuthShell";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -44,9 +44,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <>
-      <TopBar />
-      <main className="page">
+    <AuthShell>
         <h1>{t("register.title")}</h1>
         <form onSubmit={handleSubmit}>
           <label htmlFor="email">
@@ -77,14 +75,13 @@ export default function RegisterPage() {
               {error}
             </p>
           )}
-          <button type="submit" disabled={submitting}>
+          <button className="pv-primary" type="submit" disabled={submitting}>
             {t("register.submit")}
           </button>
         </form>
         <p>
           <Link href="/">{t("register.loginInstead")}</Link>
         </p>
-      </main>
-    </>
+    </AuthShell>
   );
 }

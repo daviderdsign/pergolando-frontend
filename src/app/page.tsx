@@ -1,15 +1,22 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { TopBar } from "@/components/TopBar";
+import {loginDestination} from "@/lib/login-destination";
+import { AuthShell } from "@/components/AuthShell";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  useEffect(() => {
+    let active = true;
+    const destination = loginDestination(window.location.search);
+    apiFetch("/auth/me").then(() => { if (active) router.replace(destination); }).catch(() => {});
+    return () => { active = false; };
+  }, [router]);
+  const { t, lang } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -24,7 +31,7 @@ export default function LoginPage() {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      router.push("/wizard");
+      router.push(loginDestination(window.location.search));
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.body.error.code === "INVALID_CREDENTIALS") {
@@ -46,10 +53,8 @@ export default function LoginPage() {
   }
 
   return (
-    <>
-      <TopBar />
-      <main className="page">
-        <h1>{t("login.title")}</h1>
+    <AuthShell>
+        <h1>{lang==="en"?"Sign in to Pergolando.":"Accedi a Pergolando."}</h1><p className="pv-intro">{lang==="en"?"Your next project starts here.":"Il prossimo progetto comincia qui."}</p>
         <form onSubmit={handleSubmit}>
           <label htmlFor="email">
             {t("login.email")}
@@ -78,8 +83,8 @@ export default function LoginPage() {
               {error}
             </p>
           )}
-          <button type="submit" disabled={submitting}>
-            {t("login.submit")}
+          <button className="pv-primary" type="submit" disabled={submitting}>
+            {submitting?(lang==="en"?"Signing in…":"Accesso in corso…"):t("login.submit")}
           </button>
         </form>
         <p>
@@ -88,7 +93,6 @@ export default function LoginPage() {
         <p>
           <Link href="/register">{t("login.registerInstead")}</Link>
         </p>
-      </main>
-    </>
+    </AuthShell>
   );
 }

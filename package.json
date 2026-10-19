@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/copy-pdf-worker.cjs && next dev",
+    "build": "node scripts/copy-pdf-worker.cjs && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,9 +12,12 @@
   },
   "dependencies": {
     "@pergolando/shared": "github:daviderdsign/pergolando-shared#v0.3.0",
+    "jspdf": "^4.2.1",
     "next": "16.3.5",
+    "pdfjs-dist": "4.10.38",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "tesseract.js": "6.0.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.1",
