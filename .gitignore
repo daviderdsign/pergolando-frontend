@@ -44,3 +44,14 @@ next-env.d.ts
 # playwright
 /playwright-report/
 /test-results/
+
+# OCR assets generated from the pinned dependency during build
+/public/ocr/
+/vendor/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.key
+/output/
+/work/

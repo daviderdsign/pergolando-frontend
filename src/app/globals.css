@@ -228,6 +228,22 @@ button.secondary {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   cursor: crosshair;
+  /* Long-press-to-place-a-point is exactly the gesture iOS Safari (and,
+     less reliably than Chrome/Android, some other mobile browsers) uses
+     for its own image callout menu (save/copy/look up) — found live
+     2026-10-05 on Android, where onContextMenu's preventDefault alone
+     wasn't enough on every browser. Both rules target that callout, not
+     real text selection (there's no text here to select). */
+  -webkit-touch-callout: none;
+  user-select: none;
+  /* Without this, a press-and-drag during the point-tapping phase (the
+     loupe's whole reason to exist: press, see the point, slide the finger
+     to adjust it, release to confirm) was being intercepted by the
+     browser as its own pan/scroll gesture instead of reaching our pointer
+     handlers — found live 2026-10-05: only a stationary tap (no visible
+     drag) was landing correctly. `.griglia-trascinabile` already had this
+     for the later grid-drag phase; it just needed to apply here too. */
+  touch-action: none;
 }
 
 .punto-riferimento-marker {
@@ -247,6 +263,17 @@ button.secondary {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+.scena3d-tweak-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 0.4rem;
+}
+
+.scena3d-tweak-row span {
+  min-width: 6rem;
 }
 
 .magnifier {

@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { TopBar } from "@/components/TopBar";
+import { AuthShell } from "@/components/AuthShell";
 
 export default function ForgotPasswordPage() {
   const { t } = useI18n();
@@ -54,9 +54,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <>
-      <TopBar />
-      <main className="page">
+    <AuthShell>
         {step === "request" && (
           <>
             <h1>{t("forgotPassword.title")}</h1>
@@ -78,7 +76,7 @@ export default function ForgotPasswordPage() {
                   {error}
                 </p>
               )}
-              <button type="submit" disabled={submitting}>
+              <button className="pv-primary" type="submit" disabled={submitting}>
                 {t("forgotPassword.submit")}
               </button>
             </form>
@@ -125,7 +123,7 @@ export default function ForgotPasswordPage() {
                   {error}
                 </p>
               )}
-              <button type="submit" disabled={submitting}>
+              <button className="pv-primary" type="submit" disabled={submitting}>
                 {t("resetPassword.submit")}
               </button>
             </form>
@@ -141,7 +139,6 @@ export default function ForgotPasswordPage() {
             </p>
           </>
         )}
-      </main>
-    </>
+    </AuthShell>
   );
 }

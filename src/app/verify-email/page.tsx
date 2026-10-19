@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { TopBar } from "@/components/TopBar";
+import { AuthShell } from "@/components/AuthShell";
 
 function VerifyEmailForm() {
   const { t } = useI18n();
@@ -61,9 +61,7 @@ function VerifyEmailForm() {
   }
 
   return (
-    <>
-      <TopBar />
-      <main className="page">
+    <AuthShell>
         <h1>{t("verify.title")}</h1>
         {verified ? (
           <>
@@ -97,7 +95,7 @@ function VerifyEmailForm() {
                 </p>
               )}
               {notice && <p role="status">{notice}</p>}
-              <button type="submit" disabled={submitting}>
+              <button className="pv-primary" type="submit" disabled={submitting}>
                 {t("verify.submit")}
               </button>
             </form>
@@ -108,8 +106,7 @@ function VerifyEmailForm() {
             </p>
           </>
         )}
-      </main>
-    </>
+    </AuthShell>
   );
 }
 
