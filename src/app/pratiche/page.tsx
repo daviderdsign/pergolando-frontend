@@ -1,7 +1,7 @@
 "use client";
 import {WorkspaceHeader} from '@/components/WorkspaceHeader';
 import {CaseImages} from '@/components/CaseImages';
-import {useEffect,useState} from 'react';import Link from 'next/link';import {apiFetch} from '@/lib/api';import {LanguageSwitcher} from '@/components/LanguageSwitcher';import '../prova/prova.css';import '../accesso.css';
+import {useEffect,useState} from 'react';import Link from 'next/link';import {apiFetch} from '@/lib/api';import '../prova/prova.css';import '../accesso.css';
 type Item={id:string;brand:string;productName:string;amountCents:number;configuration:string;version:number;archivedAt:string|null;mediaIds:string;requestedConfiguration:string};type Case={acceptedProposalId:string|null;confirmedProposalId:string|null;id:string;caseName?:string;companyName?:string;firstName:string;lastName:string;email:string;phone:string;address:string;updatedAt:string;items:Item[]};
 const money=(cents:number)=>new Intl.NumberFormat('it-IT',{style:'currency',currency:'EUR'}).format(cents/100);
 function editUrl(projectId:string,item:Item){const request=JSON.parse(item.requestedConfiguration||'{}');return request.kind==='dealer-catalog'?`/cataloghi/preventivo?catalog=${encodeURIComponent(request.catalogId)}&case=${encodeURIComponent(projectId)}&item=${encodeURIComponent(item.id)}`:`/progetto?case=${encodeURIComponent(projectId)}&item=${encodeURIComponent(item.id)}`;}

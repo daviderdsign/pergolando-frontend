@@ -32,7 +32,7 @@ export default function ProvaPage(){
  const [email,setEmail]=useState("");
  const [customer,setCustomer]=useState(""),[address,setAddress]=useState(""),[model,setModel]=useState(""),[variant,setVariant]=useState("");
  const [width,setWidth]=useState(""),[depth,setDepth]=useState(""),[height,setHeight]=useState(""),[rise,setRise]=useState(""),[structure,setStructure]=useState(""),[plastic,setPlastic]=useState(""),[control,setControl]=useState(""),[accessories,setAccessories]=useState<string[]>([]);
- const [quote,setQuote]=useState<ConfigurazionePergola|null>(null),[photo,setPhoto]=useState<string|null>(null),[line,setLine]=useState<PhotoPoint[]>([]),[vertical,setVertical]=useState<PhotoPoint[]>([]),[ground,setGround]=useState<PhotoPoint[]>([]),[lineLength,setLineLength]=useState(""),[verticalLength,setVerticalLength]=useState("");
+ const [quote,setQuote]=useState<ConfigurazionePergola|null>(null),[photo,setPhoto]=useState<string|null>(null),[,setLine]=useState<PhotoPoint[]>([]),[,setVertical]=useState<PhotoPoint[]>([]),[,setGround]=useState<PhotoPoint[]>([]),[lineLength,setLineLength]=useState(""),[,setVerticalLength]=useState("");
  const [pose,setPose]=useState<PosaCamera|null>(null),[origin,setOrigin]=useState<Vec3>([0,0,0]),[visualWidth,setVisualWidth]=useState(500),[visualDepth,setVisualDepth]=useState(350),[visualHeight,setVisualHeight]=useState(280),[visualRise,setVisualRise]=useState(40),[render,setRender]=useState<string|null>(null),[composite,setComposite]=useState<string|null>(null);
  const [brands,setBrands]=useState<BrandCatalog[]>([]),[brand,setBrand]=useState("");
  const [drawings,setDrawings]=useState<BlenderDrawings|null>(null);

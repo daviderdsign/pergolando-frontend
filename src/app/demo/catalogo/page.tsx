@@ -10,7 +10,7 @@ import {apiFetch} from '@/lib/api';
 import {uploadCatalogFiles,type CatalogRecord} from '@/lib/server-catalog';
 import '../../prova/prova.css';
 export default function CatalogDemo(){
- const [name,setName]=useState(''),[brand,setBrand]=useState(''),[files,setFiles]=useState<File[]>([]),[result,setResult]=useState<ImportResult>(),[selected,setSelected]=useState(0),[message,setMessage]=useState(''),[error,setError]=useState(''),[saving,setSaving]=useState(false),[loading,setLoading]=useState(true),[progress,setProgress]=useState(''),[dirty,setDirty]=useState(false),[serverId,setServerId]=useState('');
+ const [name,setName]=useState(''),[brand,setBrand]=useState(''),[files,setFiles]=useState<File[]>([]),[result,setResult]=useState<ImportResult>(),[selected,setSelected]=useState(0),[message,setMessage]=useState(''),[error,setError]=useState(''),[saving,setSaving]=useState(false),[loading,setLoading]=useState(true),[progress,setProgress]=useState(''),[,setDirty]=useState(false),[serverId,setServerId]=useState('');
  const [ocrMode,setOcrMode]=useState<'auto'|'all'|'off'>('auto');
  const controller=useRef<AbortController|null>(null);const busy=loading||saving||!!progress;
  useEffect(()=>{let active=true;readDraft().then(draft=>{if(active&&draft){setName(draft.name);setBrand(draft.brand);setFiles(draft.files);setResult(draft.result);setMessage('Progetto recuperato da questo browser.');}}).catch(()=>{if(active)setError('Salvataggio locale non disponibile. Per conservare il lavoro, esporta il risultato JSON.');}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;controller.current?.abort();};},[]);
