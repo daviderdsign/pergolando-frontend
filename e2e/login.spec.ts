@@ -3,7 +3,7 @@ import AxeBuilder from "@axe-core/playwright";
 
 test("login page renders with no accessibility violations", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Accesso venditore" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Accedi a Pergolando." })).toBeVisible();
 
   const results = await new AxeBuilder({ page }).analyze();
   expect(results.violations).toEqual([]);
@@ -11,10 +11,10 @@ test("login page renders with no accessibility violations", async ({ page }) => 
 
 test("language switcher toggles the page language", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Accesso venditore" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Accedi a Pergolando." })).toBeVisible();
 
   await page.getByRole("button", { name: "EN" }).click();
-  await expect(page.getByRole("heading", { name: "Seller sign in" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to Pergolando." })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });
 
