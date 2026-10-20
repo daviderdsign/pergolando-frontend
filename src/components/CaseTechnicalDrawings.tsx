@@ -11,8 +11,11 @@ const jobs=new Map<string,Promise<Saved>>();
 function generate(caseId:string,item:CaseProduct){
  const key=`${caseId}/${item.id}/${item.version}`;const previous=jobs.get(key);if(previous)return previous;
  const task=(async()=>{
-  const c=productDetails(item),r=productRequest(item);
-  const result=await requestTechnical({catalogo:item.brand.toLowerCase(),lRichiestaCm:c.L_totale_effettiva_cm,pRichiestaCm:c.P_totale_effettiva_cm,altezzaCm:c.altezza_montanti_cm,deltaHCm:Number(r.deltaHCm||0),fissaggio:/autoportante/i.test(c.variante_montaggio||'')?'autoportante':'parete',varianteMontaggio:r.varianteMontaggio,opzioneTecnica:r.opzioneTecnica||c.opzione_tecnica||'H20',nModuli:c.n_moduli});
+  const c=productDetails(item),r=productRequest(item),brera=item.brand.toLowerCase()==='pratic';
+  if(!Number.isInteger(c.n_moduli)||c.n_moduli<1||typeof r.varianteMontaggio!=='string'||!r.varianteMontaggio)throw Error('Configurazione incompleta: riapri il prodotto e conferma variante e numero di moduli.');
+  if(!brera&&(typeof r.deltaHCm!=='number'||!Number.isFinite(r.deltaHCm)))throw Error('Manca il dislivello del tetto salvato: riapri la configurazione e confermalo.');
+  if(brera&&!r.opzioneTecnica)throw Error('Manca il tipo di lama salvato: riapri la configurazione e confermalo.');
+  const result=await requestTechnical({catalogo:item.brand.toLowerCase(),lRichiestaCm:c.L_totale_effettiva_cm,pRichiestaCm:c.P_totale_effettiva_cm,altezzaCm:c.altezza_montanti_cm,deltaHCm:brera?0:r.deltaHCm,fissaggio:/autoportante/i.test(c.variante_montaggio||'')?'autoportante':'parete',varianteMontaggio:r.varianteMontaggio,opzioneTecnica:r.opzioneTecnica,nModuli:c.n_moduli});
   const images=[];
   for(const kind of ['plan','front','side'] as const){const data=await annotateTechnical('data:image/png;base64,'+result.technicalDrawings[kind],result.technicalDrawings.projections[kind],kind);if(data.length>2200000)throw Error('Un disegno supera il limite di archiviazione. Contatta lo studio.');images.push({kind,data});}
   try{
